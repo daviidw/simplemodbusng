@@ -80,10 +80,11 @@
 */
 
 #include "Arduino.h"
+#include "ActivityLed.h"
 
 // function definitions
-void modbus_configure(long baud, byte _slaveID, byte _TxEnablePin, unsigned int _holdingRegsSize, unsigned char _lowLatency);
-unsigned int modbus_update(unsigned int *holdingRegs);
+void modbus_configure(long baud, byte _slaveID, byte _TxEnablePin, byte _ActivityLED, unsigned int _holdingRegsSize, unsigned char _lowLatency);
+unsigned int modbus_update(int *holdingRegs);
  
 
 #endif

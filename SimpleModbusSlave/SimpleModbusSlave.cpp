@@ -10,19 +10,22 @@ unsigned char broadcastFlag;
 unsigned char slaveID;
 unsigned char function;
 unsigned char TxEnablePin;
+unsigned char ActivityLED;
 unsigned int errorCount;
 unsigned int T1_5; // inter character time out
 unsigned int T3_5; // frame delay
+ActivityLed *BoardLED;
 
 // function definitions
 void exceptionResponse(unsigned char exception);
 unsigned int calculateCRC(unsigned char bufferSize); 
 void sendPacket(unsigned char bufferSize);
 
-unsigned int modbus_update(unsigned int *holdingRegs)
+unsigned int modbus_update(int *holdingRegs)
 {
   unsigned char buffer = 0;
   unsigned char overflow = 0;
+  
   
   while (Serial.available())
   {
@@ -83,7 +86,7 @@ unsigned int modbus_update(unsigned int *holdingRegs)
               frame[1] = function;
               frame[2] = noOfBytes;
               address = 3; // PDU starts at the 4th byte
-              unsigned int temp;
+              int temp;
               
               for (index = startingAddress; index < maxData; index++)
               {
@@ -163,7 +166,11 @@ unsigned int modbus_update(unsigned int *holdingRegs)
           exceptionResponse(1); // exception 1 ILLEGAL FUNCTION
       }
       else // checksum failed
-        errorCount++;
+	  {
+        errorCount++;		  
+		if (BoardLED != NULL)
+			BoardLED->Update(LOW);
+	  }
     } // incorrect id
   }
   else if (buffer > 0 && buffer < 8)
@@ -173,7 +180,7 @@ unsigned int modbus_update(unsigned int *holdingRegs)
 }       
 
 void exceptionResponse(unsigned char exception)
-{
+{	
   errorCount++; // each call to exceptionResponse() will increment the errorCount
   if (!broadcastFlag) // don't respond if its a broadcast message
   {
@@ -185,9 +192,11 @@ void exceptionResponse(unsigned char exception)
     frame[4] = crc16 & 0xFF;
     sendPacket(5); // exception response is always 5 bytes ID, function + 0x80, exception code, 2 bytes crc
   }
+  if (BoardLED != NULL)
+	BoardLED->Update(LOW);
 }
 
-void modbus_configure(long baud, unsigned char _slaveID, unsigned char _TxEnablePin, unsigned int _holdingRegsSize, unsigned char _lowLatency)
+void modbus_configure(long baud, unsigned char _slaveID, unsigned char _TxEnablePin, unsigned char _ActivityLED, unsigned int _holdingRegsSize, unsigned char _lowLatency)
 {
   slaveID = _slaveID;
   Serial.begin(baud);
@@ -196,7 +205,17 @@ void modbus_configure(long baud, unsigned char _slaveID, unsigned char _TxEnable
   { // pin 0 & pin 1 are reserved for RX/TX. To disable set txenpin < 2
     TxEnablePin = _TxEnablePin; 
     pinMode(TxEnablePin, OUTPUT);
+	
     digitalWrite(TxEnablePin, LOW);
+  }
+  
+  if (_ActivityLED > 1) 
+  { // pin 0 & pin 1 are reserved for RX/TX. To disable set ActivityLED < 2
+	BoardLED = new ActivityLed(_ActivityLED, 50);
+  }
+  else
+  {
+	  BoardLED = NULL;
   }
   
   // Modbus states that a baud rate higher than 19200 must use a fixed 750 us 
@@ -259,8 +278,12 @@ unsigned int calculateCRC(byte bufferSize)
 void sendPacket(unsigned char bufferSize)
 {
   if (TxEnablePin > 1)
+  {
     digitalWrite(TxEnablePin, HIGH);
-    
+  }
+  if (BoardLED != NULL)
+	  BoardLED->Update(HIGH);
+  
   for (unsigned char i = 0; i < bufferSize; i++)
     Serial.write(frame[i]);
     
@@ -270,5 +293,9 @@ void sendPacket(unsigned char bufferSize)
   delayMicroseconds(T3_5); 
   
   if (TxEnablePin > 1)
+  {
     digitalWrite(TxEnablePin, LOW);
+  }
+  if (BoardLED != NULL)
+	  BoardLED->Update(LOW);
 }
